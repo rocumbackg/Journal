@@ -1,0 +1,1836 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diário & Rastreador de Hábitos</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+        .container {
+            max-width: 1200px;
+            z-index: 60; /* Garante que o conteúdo principal fique por cima */
+            position: relative;
+        }
+        /* Estilos do calendário */
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 5px;
+        }
+        .calendar-header {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            text-align: center;
+            font-weight: 600;
+            color: #4b5563;
+        }
+        .day-cell {
+            padding: 10px;
+            text-align: center;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: background-color 0.2s, border-color 0.2s;
+        }
+        .day-cell.has-entry {
+            background-color: #d1fae5; /* Verde claro para dias com anotação */
+            border: 1px solid #10b981;
+        }
+        .day-cell.today {
+            background-color: #bfdbfe; /* Azul claro para o dia atual */
+            border: 1px solid #3b82f6;
+        }
+        .day-cell.selected-day {
+            background-color: #dbeafe; /* Destaque para o dia selecionado */
+            border: 2px solid #2563eb;
+        }
+        .day-cell:hover:not(.selected-day) {
+            background-color: #e5e7eb;
+        }
+        .day-cell.empty {
+            cursor: default;
+            background-color: transparent;
+        }
+        /* Estilos do editor de texto */
+        .editor-container {
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            overflow: hidden;
+            background-color: white;
+            min-height: 400px;
+            display: flex;
+            flex-direction: column;
+        }
+        .toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding: 8px;
+            border-bottom: 1px solid #d1d5db;
+            background-color: #f9fafb;
+        }
+        .toolbar button, .toolbar select {
+            padding: 6px 10px;
+            border-radius: 6px;
+            background-color: transparent;
+            font-weight: 600;
+            transition: background-color 0.2s;
+            border: 1px solid transparent;
+        }
+        .toolbar button:hover, .toolbar select:hover {
+            background-color: #e5e7eb;
+        }
+        .toolbar button.active {
+            background-color: #d1d5db;
+        }
+        .diary-content {
+            flex-grow: 1;
+            padding: 16px;
+            outline: none;
+            overflow-y: auto;
+            line-height: 1.6;
+        }
+        .diary-content img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            margin: 8px 0;
+            display: block;
+        }
+        /* Galeria de Miniaturas */
+        .image-gallery {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding: 8px;
+            max-height: calc(100vh - 200px); /* Ajusta a altura da galeria */
+            overflow-y: auto;
+        }
+        .thumbnail-container {
+            position: relative;
+            width: 80px;
+            height: 80px;
+        }
+        .thumbnail {
+            width: 100%;
+            height: 100%;
+            border-radius: 8px;
+            cursor: pointer;
+            object-fit: cover;
+            border: 2px solid transparent;
+            transition: border-color 0.2s;
+        }
+        .thumbnail:hover {
+            border-color: #2563eb;
+        }
+        .delete-btn {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            width: 20px;
+            height: 20px;
+            background-color: #ef4444;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            cursor: pointer;
+            border: 2px solid white;
+            transition: transform 0.2s, background-color 0.2s;
+        }
+        .delete-btn:hover {
+            background-color: #dc2626;
+            transform: scale(1.1);
+        }
+        
+        /* Lightbox para visualização de imagem grande */
+        .lightbox-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        .lightbox-modal.show {
+            display: flex;
+        }
+        .lightbox-modal img {
+            max-width: 90%;
+            max-height: 90%;
+            border-radius: 12px;
+        }
+        .lightbox-close-btn {
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            color: #fff;
+            font-size: 3rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+        .lightbox-close-btn:hover {
+            color: #fca5a5;
+        }
+        /* Estilos do gráfico de hábitos */
+        .habit-chart {
+            display: grid;
+            grid-template-columns: repeat(31, minmax(10px, 1fr));
+            gap: 2px;
+            height: 20px;
+            background-color: #e5e7eb;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .habit-day {
+            height: 100%;
+            transition: background-color 0.2s;
+        }
+        .habit-day.completed {
+            background-color: #10b981;
+        }
+        .habit-day.not-completed {
+            background-color: #d1d5db;
+        }
+
+        /* Novos estilos para o calendário de análise */
+        .analysis-calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 5px;
+            text-align: center;
+        }
+        .analysis-day-cell {
+            padding: 8px 0;
+            border-radius: 6px;
+            color: white; 
+            transition: background-color 0.2s;
+            font-size: 0.875rem; /* text-sm */
+            font-weight: 700;    /* font-bold */
+        }
+        .habit-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px;
+            border-radius: 8px;
+            background-color: #f9fafb;
+            border: 1px solid #e5e7eb;
+        }
+        .habit-color-box {
+            width: 16px;
+            height: 16px;
+            border-radius: 4px;
+        }
+        .habit-delete-btn {
+            background-color: #ef4444;
+            color: white;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .habit-delete-btn:hover {
+            background-color: #dc2626;
+        }
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            width: 90%;
+            max-width: 400px;
+        }
+        /* Novos estilos para o gerenciamento de pessoas */
+        .people-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 16px;
+        }
+        .person-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f9fafb;
+            border-radius: 8px;
+            padding: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            position: relative;
+            cursor: pointer;
+            transition: transform 0.2s ease-in-out;
+        }
+        .person-card:hover {
+            transform: translateY(-4px);
+        }
+        .person-card img {
+            width: 80px;
+            height: 80px;
+            object-fit: cover;
+            border-radius: 50%;
+            border: 2px solid #d1d5db;
+        }
+        .person-card p {
+            font-weight: 600;
+            color: #4b5563;
+            margin-top: 8px;
+            text-align: center;
+        }
+        .person-delete-btn {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+        }
+        /* Estilos para a decoração flutuante */
+        .floating-images-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 50; /* Abaixo do conteúdo principal */
+        }
+        .floating-image {
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            opacity: 0;
+            transform: scale(0);
+            transition: transform 0.5s ease-in-out, opacity 0.5s ease-in-out;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+            object-fit: cover;
+            cursor: pointer;
+            pointer-events: auto; /* Reativa a interação */
+        }
+        .floating-image.show {
+             opacity: 0.8;
+             transform: scale(1);
+        }
+        /* Modal de detalhes da pessoa */
+        .details-modal-content {
+             width: 90%;
+             max-width: 600px;
+        }
+        .details-extra-photos {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 8px;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+
+    <div class="container mx-auto bg-white rounded-xl shadow-lg p-6 md:p-10 space-y-8">
+        <header class="text-center">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-800">Diário & Rastreador de Hábitos</h1>
+            <p class="mt-2 text-gray-500">Registre seus pensamentos e acompanhe seu progresso.</p>
+        </header>
+
+        <!-- Seção Principal - Calendário -->
+        <div id="mainSection" class="space-y-8">
+            <section class="bg-gray-50 p-6 rounded-lg shadow-inner">
+                <div class="md:w-full flex-shrink-0">
+                    <h2 class="text-2xl font-semibold text-gray-700 mb-4">Diário</h2>
+                    <div class="flex items-center justify-between mb-4">
+                        <button id="prevMonthBtn" class="p-2 rounded-full hover:bg-gray-200 transition-colors duration-200">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+                            </svg>
+                        </button>
+                        <h3 id="currentMonthYear" class="text-xl font-bold text-gray-800"></h3>
+                        <button id="nextMonthBtn" class="p-2 rounded-full hover:bg-gray-200 transition-colors duration-200">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="calendar-header mb-2">
+                        <div>Dom</div><div>Seg</div><div>Ter</div><div>Qua</div><div>Qui</div><div>Sex</div><div>Sáb</div>
+                    </div>
+                    <div id="calendar" class="calendar-grid">
+                        <!-- Células do calendário serão geradas aqui -->
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Seção do Editor de Texto (simula uma nova página) -->
+        <div id="editorSection" class="hidden">
+            <div class="bg-gray-50 p-6 rounded-lg shadow-inner">
+                <header class="flex justify-between items-center mb-6">
+                    <button id="backToCalendarBtn" class="p-2 rounded-full hover:bg-gray-200 transition-colors duration-200">
+                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+                         </svg>
+                    </button>
+                    <h2 class="text-2xl font-bold text-gray-800">Editor de Texto</h2>
+                    <div class="flex items-center gap-2">
+                        <button id="showHabitAnalysisBtn" class="px-4 py-2 bg-purple-500 text-white rounded-md font-semibold hover:bg-purple-600 transition-colors duration-200">
+                            Análise de Hábitos
+                        </button>
+                        <button id="showHabitManagementBtn" class="px-4 py-2 bg-purple-500 text-white rounded-md font-semibold hover:bg-purple-600 transition-colors duration-200">
+                            Gerenciar Hábitos
+                        </button>
+                        <button id="showPeopleManagementBtn" class="px-4 py-2 bg-blue-500 text-white rounded-md font-semibold hover:bg-blue-600 transition-colors duration-200">
+                            Gerenciar Pessoas
+                        </button>
+                    </div>
+                </header>
+
+                <!-- Seção do Rastreador de Hábitos -->
+                <section class="bg-white p-6 rounded-lg shadow-md border border-gray-200 mb-6">
+                    <h3 class="text-xl font-semibold mb-3 text-gray-700">Rastreador de Hábitos</h3>
+                    <div class="flex items-center justify-between mb-4">
+                        <button id="prevHabitBtn" class="p-2 rounded-full hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+                            </svg>
+                        </button>
+                        <div id="habitDisplay" class="text-center flex-grow">
+                            <span id="habitNameEl" class="font-bold text-lg text-gray-800"></span>
+                            <p id="habitCountEl" class="text-sm text-gray-500"></p>
+                            <p id="habitStatusEl" class="text-sm font-medium mt-1"></p>
+                        </div>
+                        <button id="nextHabitBtn" class="p-2 rounded-full hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="flex justify-center items-center gap-4 p-4 rounded-lg bg-gray-50">
+                        <button id="completeBtn" class="px-6 py-2 bg-green-500 text-white rounded-md font-semibold hover:bg-green-600 transition-colors">
+                            Concluído
+                        </button>
+                        <button id="incompleteBtn" class="px-6 py-2 bg-red-500 text-white rounded-md font-semibold hover:bg-red-600 transition-colors">
+                            Não Concluído
+                        </button>
+                    </div>
+                </section>
+                
+                <hr class="border-gray-300">
+
+                <div class="flex flex-col md:flex-row gap-6 mt-6">
+                    <!-- Editor de Texto -->
+                    <div class="w-full md:w-3/4 flex flex-col">
+                        <div class="editor-container">
+                            <div class="toolbar">
+                                <button id="editorBoldBtn" class="font-bold">B</button>
+                                <button id="editorItalicBtn" class="italic">I</button>
+                                <button id="editorUnderlineBtn" class="underline">U</button>
+                                <button id="editorULBtn">&bull; Lista</button>
+                                <button id="editorLeftBtn">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+                                    </svg>
+                                </button>
+                                <button id="editorCenterBtn">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M4.5 12h15M3.75 17.25h16.5" />
+                                    </svg>
+                                </button>
+                                <button id="editorRightBtn">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+                                    </svg>
+                                </button>
+                                <button id="editorJustifyBtn">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+                                    </svg>
+                                </button>
+                                <select id="fontSizeSelect">
+                                    <option value="3">Normal</option>
+                                    <option value="1">Pequeno</option>
+                                    <option value="5">Grande</option>
+                                    <option value="7">Enorme</option>
+                                </select>
+                                <input type="color" id="fontColorPicker" class="w-8 h-8 rounded-full cursor-pointer">
+                            </div>
+                            <div id="editorContent" contenteditable="true" class="diary-content text-gray-700"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Painel de Imagens -->
+                    <div class="w-full md:w-1/4 bg-white p-4 rounded-lg shadow-md border border-gray-200">
+                        <h3 class="text-xl font-semibold mb-3 text-gray-700">Minhas Lembranças</h3>
+                        
+                        <!-- Botão de Ação de Imagem -->
+                        <div class="mb-4">
+                             <input type="file" id="imageUploadInput" accept="image/*" multiple class="hidden">
+                             <button id="addImagesBtn" class="w-full px-4 py-2 bg-blue-500 text-white rounded-md font-semibold hover:bg-blue-600 transition-colors">
+                                 Adicionar Imagens
+                             </button>
+                        </div>
+
+                        <!-- Galeria de Imagens -->
+                        <div id="imageGallery" class="image-gallery border border-dashed border-gray-300 rounded-lg">
+                            <p class="text-center text-sm text-gray-400 p-4">Faça upload de imagens para as suas lembranças.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex justify-end mt-4">
+                    <button id="editorSaveBtn" class="px-6 py-2 bg-blue-600 text-white rounded-md font-semibold hover:bg-blue-700 transition-colors duration-200">Salvar Anotação</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Seção de Análise de Hábitos (nova página) -->
+        <div id="analysisSection" class="hidden">
+            <div class="bg-gray-50 p-6 rounded-lg shadow-inner">
+                <header class="flex justify-between items-center mb-6">
+                    <button id="backToEditorFromAnalysisBtn" class="p-2 rounded-full hover:bg-gray-200 transition-colors duration-200">
+                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+                         </svg>
+                    </button>
+                    <h2 class="text-2xl font-bold text-gray-800">Análise de Hábitos</h2>
+                    <div class="w-6 h-6"></div> <!-- Espaço para alinhar -->
+                </header>
+                
+                <div class="flex items-center justify-between mb-6">
+                    <button id="prevAnalysisMonthBtn" class="p-2 rounded-full hover:bg-gray-200 transition-colors duration-200">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+                        </svg>
+                    </button>
+                    <h3 id="analysisMonthYear" class="text-xl font-bold text-gray-800"></h3>
+                    <button id="nextAnalysisMonthBtn" class="p-2 rounded-full hover:bg-gray-200 transition-colors duration-200">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                        </svg>
+                    </button>
+                </div>
+                
+                <div id="habitAnalysisContainer" class="space-y-8">
+                    <!-- Análises individuais de hábitos serão geradas aqui -->
+                </div>
+            </div>
+        </div>
+        
+        <!-- Seção de Gerenciamento de Hábitos (nova página) -->
+        <div id="habitManagementSection" class="hidden">
+            <div class="bg-gray-50 p-6 rounded-lg shadow-inner">
+                <header class="flex justify-between items-center mb-6">
+                    <button id="backToEditorFromManagementBtn" class="p-2 rounded-full hover:bg-gray-200 transition-colors duration-200">
+                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+                         </svg>
+                    </button>
+                    <h2 class="text-2xl font-bold text-gray-800">Gerenciar Hábitos</h2>
+                    <div class="w-6 h-6"></div>
+                </header>
+
+                <div class="mb-4">
+                    <button id="addHabitBtn" class="w-full px-4 py-2 bg-green-500 text-white rounded-md font-semibold hover:bg-green-600 transition-colors duration-200">
+                        Adicionar Hábito
+                    </button>
+                </div>
+
+                <div id="habitList" class="space-y-4">
+                    <!-- Lista de hábitos será gerada aqui -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Seção de Gerenciamento de Pessoas (NOVA PÁGINA) -->
+        <div id="peopleManagementSection" class="hidden">
+            <div class="bg-gray-50 p-6 rounded-lg shadow-inner">
+                <header class="flex justify-between items-center mb-6">
+                    <button id="backToEditorFromPeopleBtn" class="p-2 rounded-full hover:bg-gray-200 transition-colors duration-200">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+                        </svg>
+                    </button>
+                    <h2 class="text-2xl font-bold text-gray-800">Gerenciar Pessoas</h2>
+                    <div class="w-6 h-6"></div>
+                </header>
+                
+                <!-- Formulário para adicionar pessoa -->
+                <div id="addPersonForm" class="bg-white p-6 rounded-lg shadow-md border border-gray-200 mb-6">
+                    <h3 class="text-xl font-semibold mb-4 text-gray-700">Adicionar Nova Pessoa</h3>
+                    <div class="flex flex-col md:flex-row gap-4">
+                        <div class="w-full md:w-2/3">
+                            <label for="personNameInput" class="block text-sm font-medium text-gray-700 mb-1">Nomes (separados por vírgula)</label>
+                            <input type="text" id="personNameInput" placeholder="Ex: Maria, Maricota" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div class="w-full md:w-1/3">
+                             <input type="file" id="personImageInput" accept="image/*" class="hidden">
+                             <button id="selectPersonImageBtn" class="w-full px-4 py-2 bg-blue-500 text-white rounded-md font-semibold hover:bg-blue-600 transition-colors">
+                                 Selecionar Foto
+                             </button>
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <button id="savePersonBtn" class="w-full px-4 py-2 bg-green-500 text-white rounded-md font-semibold hover:bg-green-600 transition-colors">
+                             Salvar Pessoa
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Galeria de Pessoas Cadastradas -->
+                <div id="peopleGallery" class="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+                    <h3 class="text-xl font-semibold mb-4 text-gray-700">Pessoas Cadastradas</h3>
+                    <div id="peopleGrid" class="people-grid">
+                        <p class="text-center text-sm text-gray-400 p-4 col-span-full">Nenhuma pessoa cadastrada.</p>
+                    </div>
+                </div>
+
+                <!-- Formulário de Detalhes da Pessoa -->
+                <div id="personDetailsForm" class="bg-white p-6 rounded-lg shadow-md border border-gray-200 mt-6 hidden">
+                     <header class="flex justify-between items-center mb-6">
+                         <button id="backToPeopleGalleryBtn" class="p-2 rounded-full hover:bg-gray-200 transition-colors duration-200">
+                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
+                             </svg>
+                         </button>
+                         <h3 class="text-xl font-bold text-gray-800" id="personDetailsTitle">Detalhes da Pessoa</h3>
+                         <div class="w-6 h-6"></div>
+                     </header>
+
+                     <div class="space-y-4">
+                         <div>
+                             <label class="block text-sm font-medium text-gray-700 mb-1">Informações Básicas</label>
+                             <textarea id="basicInfoInput" rows="3" class="w-full p-2 border rounded-md"></textarea>
+                         </div>
+                         <div>
+                             <label class="block text-sm font-medium text-gray-700 mb-1">Histórico</label>
+                             <textarea id="historyInput" rows="3" class="w-full p-2 border rounded-md"></textarea>
+                         </div>
+                         <div>
+                             <label class="block text-sm font-medium text-gray-700 mb-1">Experiências Marcantes</label>
+                             <textarea id="memorableExperiencesInput" rows="3" class="w-full p-2 border rounded-md"></textarea>
+                         </div>
+                         <div>
+                              <div class="flex justify-between items-center mb-2">
+                                  <label class="block text-sm font-medium text-gray-700">Outras Fotos</label>
+                                  <input type="file" id="extraPhotosInput" accept="image/*" multiple class="hidden">
+                                  <button id="addExtraPhotosBtn" class="px-4 py-2 bg-blue-500 text-white text-sm rounded-md hover:bg-blue-600 transition-colors">Adicionar Fotos</button>
+                              </div>
+                              <div id="extraPhotosGallery" class="flex flex-wrap gap-2 p-2 border rounded-md bg-gray-50 min-h-[50px]">
+                                   <p class="text-center text-sm text-gray-400 p-2">Nenhuma foto adicional.</p>
+                              </div>
+                         </div>
+                         <button id="savePersonDetailsBtn" class="w-full px-4 py-2 bg-green-500 text-white rounded-md font-semibold hover:bg-green-600 transition-colors">Salvar Detalhes</button>
+                     </div>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Container para imagens flutuantes (NOVO) -->
+    <div id="floatingImagesContainer" class="floating-images-container"></div>
+
+    <!-- Lightbox Modal para visualização de imagem -->
+    <div id="lightboxModal" class="lightbox-modal">
+        <span id="lightboxCloseBtn" class="lightbox-close-btn">&times;</span>
+        <img id="lightboxImage" src="" alt="Imagem grande">
+    </div>
+
+    <!-- Modal para adicionar hábito -->
+    <div id="addHabitModal" class="modal">
+        <div class="modal-content">
+            <h3 class="text-xl font-bold mb-4 text-gray-800">Adicionar Novo Hábito</h3>
+            <div class="mb-4">
+                <label for="habitNameInput" class="block text-sm font-medium text-gray-700 mb-1">Nome do Hábito</label>
+                <input type="text" id="habitNameInput" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+            <div class="mb-6">
+                <label for="habitColorInput" class="block text-sm font-medium text-gray-700 mb-1">Cor</label>
+                <input type="color" id="habitColorInput" value="#34d399" class="w-full h-10 rounded-md">
+            </div>
+            <div class="flex justify-end gap-2">
+                <button id="saveHabitBtn" class="px-4 py-2 bg-blue-600 text-white rounded-md font-semibold hover:bg-blue-700">Salvar</button>
+                <button id="cancelHabitBtn" class="px-4 py-2 bg-gray-300 text-gray-800 rounded-md font-semibold hover:bg-gray-400">Cancelar</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal de Detalhes da Pessoa (para visualização) -->
+    <div id="personDetailsModal" class="modal">
+        <div class="modal-content details-modal-content">
+            <header class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold text-gray-800" id="modalPersonName"></h3>
+                <button class="p-2 rounded-full hover:bg-gray-200" id="closeDetailsModalBtn">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6 text-gray-600">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </header>
+            <div id="modalPersonContent" class="space-y-4 text-gray-700">
+                <!-- Conteúdo dos detalhes será injetado aqui -->
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        let db, auth;
+        let userId;
+
+        async function initializeFirebase() {
+            try {
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        console.log("Usuário autenticado com UID:", userId);
+                        loadHabits();
+                        loadPeople();
+                    } else {
+                        console.log("Nenhum usuário logado.");
+                    }
+                });
+            } catch (error) {
+                console.error("Falha na inicialização ou autenticação do Firebase:", error);
+            }
+        }
+        
+        const mainSection = document.getElementById('mainSection');
+        const editorSection = document.getElementById('editorSection');
+        const analysisSection = document.getElementById('analysisSection');
+        const habitManagementSection = document.getElementById('habitManagementSection');
+        const peopleManagementSection = document.getElementById('peopleManagementSection');
+
+        const calendarEl = document.getElementById('calendar');
+        const currentMonthYearEl = document.getElementById('currentMonthYear');
+        const prevMonthBtn = document.getElementById('prevMonthBtn');
+        const nextMonthBtn = document.getElementById('nextMonthBtn');
+
+        const editorContent = document.getElementById('editorContent');
+        const editorSaveBtn = document.getElementById('editorSaveBtn');
+        const backToCalendarBtn = document.getElementById('backToCalendarBtn');
+        const showHabitAnalysisBtn = document.getElementById('showHabitAnalysisBtn');
+        const showHabitManagementBtn = document.getElementById('showHabitManagementBtn');
+        const showPeopleManagementBtn = document.getElementById('showPeopleManagementBtn');
+        const backToEditorFromAnalysisBtn = document.getElementById('backToEditorFromAnalysisBtn');
+        const backToEditorFromManagementBtn = document.getElementById('backToEditorFromManagementBtn');
+        const backToEditorFromPeopleBtn = document.getElementById('backToEditorFromPeopleBtn');
+        
+        const addImagesBtn = document.getElementById('addImagesBtn');
+        const imageUploadInput = document.getElementById('imageUploadInput');
+        const imageGallery = document.getElementById('imageGallery');
+
+        const lightboxModal = document.getElementById('lightboxModal');
+        const lightboxImage = document.getElementById('lightboxImage');
+        const lightboxCloseBtn = document.getElementById('lightboxCloseBtn');
+
+        const editorBoldBtn = document.getElementById('editorBoldBtn');
+        const editorItalicBtn = document.getElementById('editorItalicBtn');
+        const editorUnderlineBtn = document.getElementById('editorUnderlineBtn');
+        const editorULBtn = document.getElementById('editorULBtn');
+        const editorLeftBtn = document.getElementById('editorLeftBtn');
+        const editorCenterBtn = document.getElementById('editorCenterBtn');
+        const editorRightBtn = document.getElementById('editorRightBtn');
+        const editorJustifyBtn = document.getElementById('editorJustifyBtn');
+        const fontSizeSelect = document.getElementById('fontSizeSelect');
+        const fontColorPicker = document.getElementById('fontColorPicker');
+
+        const prevHabitBtn = document.getElementById('prevHabitBtn');
+        const nextHabitBtn = document.getElementById('nextHabitBtn');
+        const habitNameEl = document.getElementById('habitNameEl');
+        const habitCountEl = document.getElementById('habitCountEl');
+        const habitStatusEl = document.getElementById('habitStatusEl');
+        const completeBtn = document.getElementById('completeBtn');
+        const incompleteBtn = document.getElementById('incompleteBtn');
+
+        const habitAnalysisContainer = document.getElementById('habitAnalysisContainer');
+        const analysisMonthYear = document.getElementById('analysisMonthYear');
+        const prevAnalysisMonthBtn = document.getElementById('prevAnalysisMonthBtn');
+        const nextAnalysisMonthBtn = document.getElementById('nextAnalysisMonthBtn');
+        
+        const habitList = document.getElementById('habitList');
+        const addHabitBtn = document.getElementById('addHabitBtn');
+        const addHabitModal = document.getElementById('addHabitModal');
+        const habitNameInput = document.getElementById('habitNameInput');
+        const habitColorInput = document.getElementById('habitColorInput');
+        const saveHabitBtn = document.getElementById('saveHabitBtn');
+        const cancelHabitBtn = document.getElementById('cancelHabitBtn');
+        
+        const addPersonForm = document.getElementById('addPersonForm');
+        const peopleGrid = document.getElementById('peopleGrid');
+        const personNameInput = document.getElementById('personNameInput');
+        const personImageInput = document.getElementById('personImageInput');
+        const selectPersonImageBtn = document.getElementById('selectPersonImageBtn');
+        const savePersonBtn = document.getElementById('savePersonBtn');
+        const floatingImagesContainer = document.getElementById('floatingImagesContainer');
+        
+        const personDetailsForm = document.getElementById('personDetailsForm');
+        const personDetailsTitle = document.getElementById('personDetailsTitle');
+        const basicInfoInput = document.getElementById('basicInfoInput');
+        const historyInput = document.getElementById('historyInput');
+        const memorableExperiencesInput = document.getElementById('memorableExperiencesInput');
+        const extraPhotosInput = document.getElementById('extraPhotosInput');
+        const addExtraPhotosBtn = document.getElementById('addExtraPhotosBtn');
+        const extraPhotosGallery = document.getElementById('extraPhotosGallery');
+        const savePersonDetailsBtn = document.getElementById('savePersonDetailsBtn');
+        const backToPeopleGalleryBtn = document.getElementById('backToPeopleGalleryBtn');
+        
+        const personDetailsModal = document.getElementById('personDetailsModal');
+        const modalPersonName = document.getElementById('modalPersonName');
+        const modalPersonContent = document.getElementById('modalPersonContent');
+        const closeDetailsModalBtn = document.getElementById('closeDetailsModalBtn');
+        
+        let currentYear, currentMonth;
+        let analysisYear, analysisMonth;
+        let selectedDate = null;
+        let uploadedImages = [];
+        let currentHabitIndex = 0;
+        let habitsData = [];
+        let peopleData = [];
+        let personPhotoBase64 = null;
+        let selectedPersonId = null;
+        let extraPhotos = [];
+
+        // Mapeamento de IDs de pessoas para elementos de imagem flutuante para evitar duplicação e "pisca-pisca"
+        const activeFloatingImages = new Map();
+        
+        const defaultColors = {
+            '#60a5fa': '#2563eb', // blue
+            '#34d399': '#059669', // green
+            '#fca5a5': '#dc2626', // red
+            '#c4b5fd': '#7c3aed', // purple
+            '#fde047': '#eab308'  // yellow
+        };
+        
+        document.addEventListener('DOMContentLoaded', async () => {
+            await initializeFirebase();
+            const today = new Date();
+            currentYear = today.getFullYear();
+            currentMonth = today.getMonth();
+            renderCalendar(currentYear, currentMonth);
+        });
+        
+        async function loadHabits() {
+            if (!userId) return;
+            try {
+                const habitsRef = collection(db, `artifacts/${appId}/users/${userId}/habits`);
+                const querySnapshot = await getDocs(habitsRef);
+                habitsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                
+                if (habitsData.length === 0) {
+                     await addDefaultHabits();
+                } else {
+                    renderHabit();
+                    renderHabitList();
+                }
+
+            } catch (error) {
+                console.error("Erro ao carregar hábitos:", error);
+            }
+        }
+        
+        async function loadPeople() {
+            if (!userId) return;
+            try {
+                const peopleRef = collection(db, `artifacts/${appId}/users/${userId}/people_photos`);
+                const querySnapshot = await getDocs(peopleRef);
+                peopleData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderPeopleGallery();
+            } catch (error) {
+                console.error("Erro ao carregar pessoas:", error);
+            }
+        }
+        
+        async function addDefaultHabits() {
+            const defaultHabits = [
+                { id: 'water', name: 'Beber água', color: '#60a5fa', darkColor: '#2563eb' },
+                { id: 'exercise', name: 'Fazer exercício', color: '#34d399', darkColor: '#059669' },
+                { id: 'reading', name: 'Ler um livro', color: '#fca5a5', darkColor: '#dc2626' },
+                { id: 'meditation', name: 'Meditar', color: '#c4b5fd', darkColor: '#7c3aed' },
+                { id: 'healthyfood', name: 'Comer saudável', color: '#fde047', darkColor: '#eab308' }
+            ];
+            
+            const habitsRef = collection(db, `artifacts/${appId}/users/${userId}/habits`);
+            for (const habit of defaultHabits) {
+                await setDoc(doc(habitsRef, habit.id), habit);
+            }
+            loadHabits(); // Recarrega os hábitos
+        }
+
+        function renderCalendar(year, month) {
+            calendarEl.innerHTML = '';
+            const date = new Date(year, month, 1);
+            const firstDayIndex = date.getDay();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const today = new Date();
+            
+            const monthName = new Date(year, month).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+            currentMonthYearEl.textContent = monthName.charAt(0).toUpperCase() + monthName.slice(1);
+
+            for (let i = 0; i < firstDayIndex; i++) {
+                const emptyCell = document.createElement('div');
+                emptyCell.className = 'day-cell empty';
+                calendarEl.appendChild(emptyCell);
+            }
+
+            for (let day = 1; day <= daysInMonth; day++) {
+                const dayCell = document.createElement('div');
+                dayCell.className = 'day-cell relative';
+                dayCell.textContent = day;
+                
+                const dayDate = new Date(year, month, day);
+                const formattedDate = formatDate(dayDate);
+                dayCell.dataset.date = formattedDate;
+
+                if (userId) { // Adiciona onSnapshot apenas se o usuário estiver autenticado
+                    const entryRef = doc(db, `artifacts/${appId}/users/${userId}/diary_entries`, formattedDate);
+                    onSnapshot(entryRef, (docSnap) => {
+                        const data = docSnap.data();
+                        if (docSnap.exists() && (data.text_content || (data.images && data.images.length > 0))) {
+                            dayCell.classList.add('has-entry');
+                        } else {
+                            dayCell.classList.remove('has-entry');
+                        }
+                    });
+                }
+
+
+                if (dayDate.toDateString() === today.toDateString()) {
+                    dayCell.classList.add('today');
+                }
+
+                dayCell.addEventListener('click', () => {
+                    document.querySelectorAll('.day-cell').forEach(cell => cell.classList.remove('selected-day'));
+                    dayCell.classList.add('selected-day');
+                    selectedDate = dayDate;
+                    openDiaryEntrySection(dayDate);
+                });
+
+                calendarEl.appendChild(dayCell);
+            }
+        }
+
+        function formatDate(date) {
+            const d = new Date(date);
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        async function openDiaryEntrySection(date) {
+            if (!userId) {
+                console.log("Aguardando autenticação do usuário...");
+                displayMessage("Aguardando autenticação...", "info");
+                return;
+            }
+
+            const formattedDate = formatDate(date);
+            
+            mainSection.classList.add('hidden');
+            editorSection.classList.remove('hidden');
+            analysisSection.classList.add('hidden');
+            habitManagementSection.classList.add('hidden');
+            peopleManagementSection.classList.add('hidden');
+            
+            editorContent.innerHTML = '';
+            uploadedImages = [];
+            currentHabitIndex = 0; // Reinicia para o primeiro hábito
+            renderHabit();
+            floatingImagesContainer.innerHTML = '';
+            activeFloatingImages.clear();
+
+            const docRef = doc(db, `artifacts/${appId}/users/${userId}/diary_entries`, formattedDate);
+            try {
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    const entry = docSnap.data();
+                    if (entry.text_content) {
+                        editorContent.innerHTML = entry.text_content;
+                        // Chama a função de verificação inicial
+                        checkPeopleInText(); 
+                    }
+                    if (entry.images && entry.images.length > 0) {
+                        uploadedImages = entry.images;
+                        renderImageGallery();
+                    }
+                }
+            } catch (error) {
+                console.error("Erro ao carregar a anotação:", error);
+                displayMessage("Erro ao carregar a anotação.", "error");
+            }
+        }
+
+        function returnToCalendar() {
+            editorSection.classList.add('hidden');
+            analysisSection.classList.add('hidden');
+            habitManagementSection.classList.add('hidden');
+            peopleManagementSection.classList.add('hidden');
+            mainSection.classList.remove('hidden');
+            floatingImagesContainer.innerHTML = '';
+            activeFloatingImages.clear();
+        }
+        
+        function openHabitAnalysisSection() {
+            editorSection.classList.add('hidden');
+            mainSection.classList.add('hidden');
+            habitManagementSection.classList.add('hidden');
+            peopleManagementSection.classList.add('hidden');
+            analysisSection.classList.remove('hidden');
+            floatingImagesContainer.innerHTML = '';
+            activeFloatingImages.clear();
+
+            const today = new Date();
+            analysisYear = today.getFullYear();
+            analysisMonth = today.getMonth();
+            renderHabitAnalysis(analysisYear, analysisMonth);
+        }
+
+        function openHabitManagementSection() {
+            editorSection.classList.add('hidden');
+            mainSection.classList.add('hidden');
+            analysisSection.classList.add('hidden');
+            peopleManagementSection.classList.add('hidden');
+            habitManagementSection.classList.remove('hidden');
+            floatingImagesContainer.innerHTML = '';
+            activeFloatingImages.clear();
+            renderHabitList();
+        }
+        
+        function openPeopleManagementSection() {
+             editorSection.classList.add('hidden');
+             mainSection.classList.add('hidden');
+             analysisSection.classList.add('hidden');
+             habitManagementSection.classList.add('hidden');
+             peopleManagementSection.classList.remove('hidden');
+             
+             // Reinicia a visualização para a galeria
+             addPersonForm.classList.remove('hidden');
+             peopleGrid.parentElement.classList.remove('hidden');
+             personDetailsForm.classList.add('hidden');
+
+             floatingImagesContainer.innerHTML = '';
+             activeFloatingImages.clear();
+             renderPeopleGallery();
+        }
+
+        prevMonthBtn.addEventListener('click', () => {
+            currentMonth--;
+            if (currentMonth < 0) {
+                currentMonth = 11;
+                currentYear--;
+            }
+            renderCalendar(currentYear, currentMonth);
+        });
+
+        nextMonthBtn.addEventListener('click', () => {
+            currentMonth++;
+            if (currentMonth > 11) {
+                currentMonth = 0;
+                currentYear++;
+            }
+            renderCalendar(currentYear, currentMonth);
+        });
+
+        editorSaveBtn.addEventListener('click', async () => {
+            const content = editorContent.innerHTML.trim();
+            const formattedDate = formatDate(selectedDate);
+            const entryRef = doc(db, `artifacts/${appId}/users/${userId}/diary_entries`, formattedDate);
+            
+            if (content || uploadedImages.length > 0) {
+                try {
+                    await setDoc(entryRef, {
+                        text_content: content,
+                        images: uploadedImages,
+                        timestamp: new Date().toLocaleString('pt-BR')
+                    });
+                    displayMessage("Anotação salva com sucesso!", "success");
+                } catch (error) {
+                    console.error("Erro ao salvar a anotação:", error);
+                    displayMessage("Erro ao salvar a anotação.", "error");
+                }
+            } else {
+                try {
+                    await setDoc(entryRef, {});
+                    displayMessage("Anotação removida.", "success");
+                } catch (error) {
+                    console.error("Erro ao remover a anotação:", error);
+                    displayMessage("Erro ao remover a anotação.", "error");
+                }
+            }
+            returnToCalendar();
+        });
+
+        addImagesBtn.addEventListener('click', () => {
+             imageUploadInput.click();
+        });
+
+        imageUploadInput.addEventListener('change', (e) => {
+            const files = e.target.files;
+            if (files.length > 0) {
+                Array.from(files).forEach(file => {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        uploadedImages.push(event.target.result);
+                        renderImageGallery();
+                    };
+                    reader.readAsDataURL(file);
+                });
+            }
+        });
+
+        function renderImageGallery() {
+            imageGallery.innerHTML = '';
+            if (uploadedImages.length === 0) {
+                imageGallery.innerHTML = '<p class="text-center text-sm text-gray-400 p-4">Faça upload de imagens para as suas lembranças.</p>';
+            } else {
+                uploadedImages.forEach((imageSrc, index) => {
+                    const thumbnailContainer = document.createElement('div');
+                    thumbnailContainer.className = 'thumbnail-container';
+
+                    const img = document.createElement('img');
+                    img.src = imageSrc;
+                    img.alt = `Thumbnail ${index + 1}`;
+                    img.className = 'thumbnail';
+                    img.addEventListener('click', () => {
+                         lightboxImage.src = imageSrc;
+                         lightboxModal.classList.add('show');
+                    });
+
+                    const deleteBtn = document.createElement('div');
+                    deleteBtn.className = 'delete-btn';
+                    deleteBtn.textContent = 'X';
+                    deleteBtn.addEventListener('click', (e) => {
+                        e.stopPropagation(); // Previne o clique na miniatura
+                        uploadedImages.splice(index, 1);
+                        renderImageGallery();
+                    });
+
+                    thumbnailContainer.appendChild(img);
+                    thumbnailContainer.appendChild(deleteBtn);
+                    imageGallery.appendChild(thumbnailContainer);
+                });
+            }
+        }
+
+        editorBoldBtn.addEventListener('click', () => document.execCommand('bold', false, null));
+        editorItalicBtn.addEventListener('click', () => document.execCommand('italic', false, null));
+        editorUnderlineBtn.addEventListener('click', () => document.execCommand('underline', false, null));
+        editorULBtn.addEventListener('click', () => document.execCommand('insertUnorderedList', false, null));
+        editorLeftBtn.addEventListener('click', () => document.execCommand('justifyLeft', false, null));
+        editorCenterBtn.addEventListener('click', () => document.execCommand('justifyCenter', false, null));
+        editorRightBtn.addEventListener('click', () => document.execCommand('justifyRight', false, null));
+        editorJustifyBtn.addEventListener('click', () => document.execCommand('justifyFull', false, null));
+        
+        fontSizeSelect.addEventListener('change', (e) => {
+            document.execCommand('fontSize', false, e.target.value);
+        });
+
+        fontColorPicker.addEventListener('input', (e) => {
+            document.execCommand('foreColor', false, e.target.value);
+        });
+
+        backToCalendarBtn.addEventListener('click', returnToCalendar);
+
+        lightboxCloseBtn.addEventListener('click', () => {
+            lightboxModal.classList.remove('show');
+        });
+
+        lightboxModal.addEventListener('click', (e) => {
+            if (e.target.id === 'lightboxModal') {
+                lightboxModal.classList.remove('show');
+            }
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && lightboxModal.classList.contains('show')) {
+                lightboxModal.classList.remove('show');
+            }
+        });
+
+        // --- Lógica do Rastreador de Hábitos ---
+
+        async function renderHabit() {
+            if (!userId) {
+                setTimeout(renderHabit, 100); // Tenta novamente se o usuário não estiver logado
+                return;
+            }
+            if (habitsData.length === 0) {
+                 habitNameEl.textContent = 'Nenhum hábito cadastrado.';
+                 prevHabitBtn.disabled = true;
+                 nextHabitBtn.disabled = true;
+                 completeBtn.disabled = true;
+                 incompleteBtn.disabled = true;
+                 return;
+            }
+
+            const habit = habitsData[currentHabitIndex];
+            habitNameEl.textContent = habit.name;
+
+            prevHabitBtn.disabled = currentHabitIndex === 0;
+            nextHabitBtn.disabled = currentHabitIndex === habitsData.length - 1;
+            
+            const docRef = doc(db, `artifacts/${appId}/users/${userId}/habits_data`, habit.id);
+            const docSnap = await getDoc(docRef);
+            
+            const today = new Date();
+            const yearMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+            const day = String(today.getDate()).padStart(2, '0');
+            
+            let completionCount = 0;
+            let isCompletedToday = false;
+
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                const monthData = data.months && data.months[yearMonth] ? data.months[yearMonth] : {};
+                
+                completionCount = Object.values(monthData).filter(Boolean).length;
+                isCompletedToday = !!monthData[day];
+            }
+
+            habitCountEl.textContent = `${completionCount} concluído(s) neste mês`;
+            updateHabitStatus(isCompletedToday);
+        }
+
+        async function updateHabitStatusInFirestore(isCompleted) {
+            if (!userId) return;
+            const habit = habitsData[currentHabitIndex];
+            const docRef = doc(db, `artifacts/${appId}/users/${userId}/habits_data`, habit.id);
+
+            const today = new Date();
+            const yearMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+            const day = String(today.getDate()).padStart(2, '0');
+
+            try {
+                const docSnap = await getDoc(docRef);
+                const updateData = {};
+                updateData[`months.${yearMonth}.${day}`] = isCompleted;
+
+                if (docSnap.exists()) {
+                    await setDoc(docRef, updateData, { merge: true });
+                } else {
+                    await setDoc(docRef, {
+                        months: {
+                            [yearMonth]: { [day]: isCompleted }
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error("Erro ao salvar o hábito:", error);
+                displayMessage("Erro ao salvar o hábito.", "error");
+            }
+        }
+
+        function updateHabitStatus(isCompleted) {
+            if (isCompleted) {
+                habitStatusEl.textContent = 'Concluído hoje';
+                habitStatusEl.className = 'text-sm font-medium mt-1 text-green-600';
+            } else {
+                habitStatusEl.textContent = 'Não concluído hoje';
+                habitStatusEl.className = 'text-sm font-medium mt-1 text-red-600';
+            }
+        }
+        
+        function goToNextHabit() {
+            if (habitsData.length === 0) return;
+            currentHabitIndex = (currentHabitIndex + 1) % habitsData.length;
+            renderHabit();
+        }
+
+        // Event listeners para os botões de controle de hábito
+        prevHabitBtn.addEventListener('click', () => {
+            if (habitsData.length === 0) return;
+            currentHabitIndex = (currentHabitIndex - 1 + habitsData.length) % habitsData.length;
+            renderHabit();
+        });
+
+        // Ajuste no event listener para garantir a ordem de execução
+        nextHabitBtn.addEventListener('click', () => {
+            goToNextHabit();
+        });
+
+        completeBtn.addEventListener('click', async () => {
+            // Aguarda a atualização do banco de dados ser concluída
+            await updateHabitStatusInFirestore(true);
+            // Em seguida, move para o próximo hábito
+            goToNextHabit();
+        });
+
+        incompleteBtn.addEventListener('click', async () => {
+            // Aguarda a atualização do banco de dados ser concluída
+            await updateHabitStatusInFirestore(false);
+            // Em seguida, move para o próximo hábito
+            goToNextHabit();
+        });
+
+        showHabitAnalysisBtn.addEventListener('click', openHabitAnalysisSection);
+        showHabitManagementBtn.addEventListener('click', openHabitManagementSection);
+        showPeopleManagementBtn.addEventListener('click', openPeopleManagementSection);
+        
+        backToEditorFromAnalysisBtn.addEventListener('click', () => openDiaryEntrySection(selectedDate));
+        backToEditorFromManagementBtn.addEventListener('click', () => openDiaryEntrySection(selectedDate));
+        backToEditorFromPeopleBtn.addEventListener('click', () => openDiaryEntrySection(selectedDate));
+
+
+        prevAnalysisMonthBtn.addEventListener('click', () => {
+            analysisMonth--;
+            if (analysisMonth < 0) {
+                analysisMonth = 11;
+                analysisYear--;
+            }
+            renderHabitAnalysis(analysisYear, analysisMonth);
+        });
+
+        nextAnalysisMonthBtn.addEventListener('click', () => {
+            analysisMonth++;
+            if (analysisMonth > 11) {
+                analysisMonth = 0;
+                analysisYear++;
+            }
+            renderHabitAnalysis(analysisYear, analysisMonth);
+        });
+
+        // --- Lógica de Análise de Hábitos ---
+
+        async function renderHabitAnalysis(year, month) {
+            if (!userId) {
+                displayMessage("Aguardando autenticação para carregar dados.", "info");
+                return;
+            }
+            
+            habitAnalysisContainer.innerHTML = '';
+            const monthName = new Date(year, month).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+            analysisMonthYear.textContent = monthName.charAt(0).toUpperCase() + monthName.slice(1);
+            
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const yearMonthStr = `${year}-${String(month + 1).padStart(2, '0')}`;
+            
+            const habitsRef = collection(db, `artifacts/${appId}/users/${userId}/habits_data`);
+            const querySnapshot = await getDocs(habitsRef);
+
+            const allHabits = habitsData;
+            
+            if (allHabits.length === 0) {
+                habitAnalysisContainer.innerHTML = '<p class="text-gray-500 text-center">Nenhum dado de hábito encontrado. Adicione alguns hábitos para começar!</p>';
+                return;
+            }
+
+            const daysOfWeek = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
+            for (const habit of allHabits) {
+                const docSnap = await getDoc(doc(db, `artifacts/${appId}/users/${userId}/habits_data`, habit.id));
+                const monthlyData = docSnap.exists() && docSnap.data().months && docSnap.data().months[yearMonthStr] ? docSnap.data().months[yearMonthStr] : {};
+
+                const habitAnalysisCard = document.createElement('div');
+                habitAnalysisCard.className = 'bg-white p-4 rounded-lg shadow-md border border-gray-200';
+                
+                const title = document.createElement('h4');
+                title.className = 'text-lg font-bold mb-4 text-gray-800';
+                title.textContent = habit.name;
+
+                const calendarHeader = document.createElement('div');
+                calendarHeader.className = 'flex justify-between text-center font-semibold text-gray-500 mb-1';
+                daysOfWeek.forEach(day => {
+                    const dayEl = document.createElement('div');
+                    dayEl.className = 'w-1/7';
+                    dayEl.textContent = day;
+                    calendarHeader.appendChild(dayEl);
+                });
+                
+                const calendarGrid = document.createElement('div');
+                calendarGrid.className = 'analysis-calendar-grid';
+                
+                const firstDayIndex = new Date(year, month, 1).getDay();
+                for (let i = 0; i < firstDayIndex; i++) {
+                    const emptyCell = document.createElement('div');
+                    calendarGrid.appendChild(emptyCell);
+                }
+                
+                for (let i = 1; i <= daysInMonth; i++) {
+                    const dayCell = document.createElement('div');
+                    dayCell.className = 'analysis-day-cell relative text-center text-sm font-bold';
+                    dayCell.textContent = i;
+                    dayCell.style.backgroundColor = habit.color; // Cor base
+
+                    const dayStr = String(i).padStart(2, '0');
+                    if (monthlyData[dayStr]) {
+                        dayCell.style.backgroundColor = habit.darkColor; // Cor mais escura para dias concluídos
+                    }
+                    
+                    calendarGrid.appendChild(dayCell);
+                }
+                
+                habitAnalysisCard.appendChild(title);
+                habitAnalysisCard.appendChild(calendarHeader);
+                habitAnalysisCard.appendChild(calendarGrid);
+                habitAnalysisContainer.appendChild(habitAnalysisCard);
+            };
+        }
+        
+        // --- Lógica de Gerenciamento de Hábitos ---
+
+        function renderHabitList() {
+            habitList.innerHTML = '';
+            if (habitsData.length === 0) {
+                habitList.innerHTML = '<p class="text-center text-gray-500 p-4">Nenhum hábito cadastrado. Adicione um para começar!</p>';
+                return;
+            }
+
+            habitsData.forEach(habit => {
+                const habitItem = document.createElement('div');
+                habitItem.className = 'habit-item';
+                habitItem.innerHTML = `
+                    <div class="habit-color-box" style="background-color: ${habit.color};"></div>
+                    <span class="flex-grow font-medium text-gray-700">${habit.name}</span>
+                    <button class="habit-delete-btn" data-id="${habit.id}">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4">
+                          <path fill-rule="evenodd" d="M16.5 4.475a.75.75 0 01.72.646l.006.104 2.5 12.25A2.25 2.25 0 0117.18 21H6.82a2.25 2.25 0 01-2.546-2.525l2.5-12.25a.75.75 0 01.72-.646h8.46zm-3.513 4.257a.75.75 0 00-1.282.72l.142 6.5A.75.75 0 0012 17.5a.75.75 0 00.75-.75v-5.25a.75.75 0 00-.75-.75zM8.25 8.75a.75.75 0 011.5 0v5.25a.75.75 0 01-1.5 0V8.75zM15 8.75a.75.75 0 011.5 0v5.25a.75.75 0 01-1.5 0V8.75z" clip-rule="evenodd" />
+                        </svg>
+                    </button>
+                `;
+                habitList.appendChild(habitItem);
+            });
+            document.querySelectorAll('.habit-delete-btn').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const habitId = e.currentTarget.dataset.id;
+                    deleteHabit(habitId);
+                });
+            });
+        }
+        
+        addHabitBtn.addEventListener('click', () => {
+            habitNameInput.value = '';
+            habitColorInput.value = '#34d399';
+            addHabitModal.style.display = 'flex';
+        });
+
+        cancelHabitBtn.addEventListener('click', () => {
+            addHabitModal.style.display = 'none';
+        });
+
+        saveHabitBtn.addEventListener('click', async () => {
+            const habitName = habitNameInput.value.trim();
+            const habitColor = habitColorInput.value;
+            if (habitName) {
+                await addHabit(habitName, habitColor);
+                addHabitModal.style.display = 'none';
+            }
+        });
+
+        async function addHabit(name, color) {
+            const habitsRef = collection(db, `artifacts/${appId}/users/${userId}/habits`);
+            try {
+                // Gera um ID aleatório para o novo hábito
+                const newHabitRef = doc(habitsRef);
+                const newHabitId = newHabitRef.id;
+                
+                const darkColor = shadeColor(color, -20); // Função para escurecer a cor
+                
+                await setDoc(newHabitRef, {
+                    name,
+                    color,
+                    darkColor,
+                    id: newHabitId // Armazena o ID no documento
+                });
+                displayMessage("Hábito adicionado com sucesso!", "success");
+                loadHabits(); // Recarrega a lista de hábitos
+            } catch (error) {
+                console.error("Erro ao adicionar hábito:", error);
+                displayMessage("Erro ao adicionar hábito.", "error");
+            }
+        }
+        
+        async function deleteHabit(habitId) {
+            const habitDocRef = doc(db, `artifacts/${appId}/users/${userId}/habits`, habitId);
+            const habitDataDocRef = doc(db, `artifacts/${appId}/users/${userId}/habits_data`, habitId);
+            try {
+                await deleteDoc(habitDocRef);
+                await deleteDoc(habitDataDocRef);
+                displayMessage("Hábito excluído com sucesso!", "success");
+                loadHabits(); // Recarrega a lista de hábitos
+            } catch (error) {
+                console.error("Erro ao excluir o hábito:", error);
+                displayMessage("Erro ao excluir o hábito.", "error");
+            }
+        }
+        
+        function shadeColor(color, percent) {
+            let f = parseInt(color.slice(1), 16),
+                t = percent < 0 ? 0 : 255,
+                p = percent < 0 ? percent * -1 : percent,
+                R = f >> 16,
+                G = f >> 8 & 0x00FF,
+                B = f & 0x0000FF;
+            
+            return "#" + (0x1000000 + (Math.round((t - R) * p / 100) + R) * 0x10000 + (Math.round((t - G) * p / 100) + G) * 0x100 + (Math.round((t - B) * p / 100) + B)).toString(16).slice(1);
+        }
+
+        function displayMessage(message, type) {
+            const existingMessage = document.querySelector('.temp-message');
+            if (existingMessage) existingMessage.remove();
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `temp-message fixed bottom-5 left-1/2 -translate-x-1/2 px-6 py-3 rounded-lg text-white font-semibold shadow-xl transition-opacity duration-300 z-50 ${type === 'error' ? 'bg-red-500' : 'bg-green-500'}`;
+            messageDiv.textContent = message;
+            document.body.appendChild(messageDiv);
+            setTimeout(() => {
+                messageDiv.classList.add('opacity-0');
+                setTimeout(() => messageDiv.remove(), 300);
+            }, 3000);
+        }
+        
+        // --- Lógica de Gerenciamento de Pessoas (NOVO) ---
+        
+        selectPersonImageBtn.addEventListener('click', () => personImageInput.click());
+        
+        personImageInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    personPhotoBase64 = event.target.result;
+                    displayMessage("Foto selecionada!", "success");
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+        
+        savePersonBtn.addEventListener('click', async () => {
+            const namesString = personNameInput.value.trim();
+            if (!namesString || !personPhotoBase64) {
+                displayMessage("Por favor, insira pelo menos um nome e selecione uma foto.", "error");
+                return;
+            }
+            
+            // Transforma a string de nomes em um array, removendo espaços e vazios
+            const names = namesString.split(',').map(name => name.trim()).filter(name => name !== '');
+            
+            if (names.length === 0) {
+                 displayMessage("Por favor, insira pelo menos um nome.", "error");
+                 return;
+            }
+            
+            try {
+                const peopleRef = collection(db, `artifacts/${appId}/users/${userId}/people_photos`);
+                const docRef = doc(peopleRef);
+                await setDoc(docRef, {
+                    id: docRef.id,
+                    names: names,
+                    photo_data: personPhotoBase64
+                });
+                
+                personNameInput.value = '';
+                personPhotoBase64 = null;
+                displayMessage(`Pessoa "${names[0]}" salva com sucesso!`, "success");
+                loadPeople(); // Recarrega a galeria
+            } catch (error) {
+                console.error("Erro ao salvar a pessoa:", error);
+                displayMessage("Erro ao salvar a pessoa.", "error");
+            }
+        });
+        
+        function renderPeopleGallery() {
+            peopleGrid.innerHTML = '';
+            if (peopleData.length === 0) {
+                 peopleGrid.innerHTML = '<p class="text-center text-sm text-gray-400 p-4 col-span-full">Nenhuma pessoa cadastrada.</p>';
+            } else {
+                 peopleData.forEach(person => {
+                     const card = document.createElement('div');
+                     card.className = 'person-card';
+                     card.dataset.id = person.id;
+                     card.innerHTML = `
+                         <img src="${person.photo_data}" alt="Foto de ${person.names[0]}">
+                         <p class="text-sm font-medium text-gray-700">${person.names[0]}</p>
+                         <button class="person-delete-btn text-gray-400 hover:text-red-500 transition-colors" data-id="${person.id}">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5">
+                              <path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.58.272-2.311.579A2.75 2.75 0 002.25 7.5v.75a.75.75 0 01-1.5 0v-.75a4.25 4.25 0 014.25-4.25h2.5a.75.75 0 010 1.5h-2.5a2.75 2.75 0 00-2.75 2.75v.443c.79-.317 1.62-.511 2.479-.589C7.456 7.152 8.5 7 9.5 7c1.478 0 2.87.236 4.148.665.859.078 1.69.272 2.479.589v-.443a2.75 2.75 0 00-2.75-2.75h-2.5a.75.75 0 010-1.5h2.5z" clip-rule="evenodd" />
+                            </svg>
+                         </button>
+                     `;
+                     card.addEventListener('click', (e) => {
+                         if (e.target.closest('.person-delete-btn')) {
+                             return; // Evita abrir o editor se clicar no botão de apagar
+                         }
+                         openPersonDetailsEditor(person.id);
+                     });
+                     peopleGrid.appendChild(card);
+                 });
+                 document.querySelectorAll('.person-delete-btn').forEach(btn => {
+                     btn.addEventListener('click', async (e) => {
+                         const id = e.currentTarget.dataset.id;
+                         await deletePerson(id);
+                     });
+                 });
+            }
+        }
+        
+        async function deletePerson(personId) {
+            const docRef = doc(db, `artifacts/${appId}/users/${userId}/people_photos`, personId);
+            const detailsRef = doc(db, `artifacts/${appId}/users/${userId}/people_photos/${personId}/details/info`);
+            try {
+                // Tenta apagar os detalhes primeiro, se existirem
+                await deleteDoc(detailsRef);
+            } catch (error) {
+                // Não há problema se o documento de detalhes não existir
+                console.log("Documento de detalhes não encontrado para exclusão. Prosseguindo.");
+            }
+            try {
+                // Apaga o documento principal
+                await deleteDoc(docRef);
+                displayMessage("Pessoa removida com sucesso!", "success");
+                loadPeople();
+            } catch (error) {
+                console.error("Erro ao remover pessoa:", error);
+                displayMessage("Erro ao remover pessoa.", "error");
+            }
+        }
+
+        // Nova lógica para o formulário de detalhes
+        async function openPersonDetailsEditor(personId) {
+            selectedPersonId = personId;
+            const person = peopleData.find(p => p.id === personId);
+            if (!person) return;
+            
+            personDetailsTitle.textContent = `Editando ${person.names[0]}`;
+            
+            // Esconde a galeria e mostra o editor de detalhes
+            addPersonForm.classList.add('hidden');
+            peopleGrid.parentElement.classList.add('hidden');
+            personDetailsForm.classList.remove('hidden');
+            
+            // Carrega os dados existentes
+            const detailsRef = doc(db, `artifacts/${appId}/users/${userId}/people_photos/${personId}/details/info`);
+            const docSnap = await getDoc(detailsRef);
+
+            basicInfoInput.value = '';
+            historyInput.value = '';
+            memorableExperiencesInput.value = '';
+            extraPhotos = [];
+            
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                basicInfoInput.value = data.basic_info || '';
+                historyInput.value = data.history || '';
+                memorableExperiencesInput.value = data.memorable_experiences || '';
+                extraPhotos = data.extra_photos || [];
+            }
+            renderExtraPhotosGallery();
+        }
+
+        addExtraPhotosBtn.addEventListener('click', () => extraPhotosInput.click());
+        extraPhotosInput.addEventListener('change', (e) => {
+            const files = e.target.files;
+            if (files.length > 0) {
+                 Array.from(files).forEach(file => {
+                     const reader = new FileReader();
+                     reader.onload = (event) => {
+                         extraPhotos.push(event.target.result);
+                         renderExtraPhotosGallery();
+                     };
+                     reader.readAsDataURL(file);
+                 });
+            }
+        });
+
+        function renderExtraPhotosGallery() {
+            extraPhotosGallery.innerHTML = '';
+            if (extraPhotos.length === 0) {
+                 extraPhotosGallery.innerHTML = '<p class="text-center text-sm text-gray-400 p-2">Nenhuma foto adicional.</p>';
+            } else {
+                extraPhotos.forEach((imageSrc, index) => {
+                     const thumbnail = document.createElement('div');
+                     thumbnail.className = 'thumbnail-container relative w-24 h-24';
+                     thumbnail.innerHTML = `
+                         <img src="${imageSrc}" alt="Foto adicional ${index + 1}" class="thumbnail !rounded-md">
+                         <div class="delete-btn !top-1 !right-1 !w-6 !h-6 !text-xs" data-index="${index}">X</div>
+                     `;
+                     thumbnail.querySelector('.delete-btn').addEventListener('click', () => {
+                         extraPhotos.splice(index, 1);
+                         renderExtraPhotosGallery();
+                     });
+                     extraPhotosGallery.appendChild(thumbnail);
+                });
+            }
+        }
+
+        savePersonDetailsBtn.addEventListener('click', async () => {
+            if (!selectedPersonId) return;
+            
+            const detailsRef = doc(db, `artifacts/${appId}/users/${userId}/people_photos/${selectedPersonId}/details/info`);
+            try {
+                await setDoc(detailsRef, {
+                    basic_info: basicInfoInput.value,
+                    history: historyInput.value,
+                    memorable_experiences: memorableExperiencesInput.value,
+                    extra_photos: extraPhotos
+                });
+                displayMessage("Detalhes salvos com sucesso!", "success");
+                backToPeopleGalleryBtn.click();
+            } catch (error) {
+                console.error("Erro ao salvar detalhes:", error);
+                displayMessage("Erro ao salvar detalhes.", "error");
+            }
+        });
+
+        backToPeopleGalleryBtn.addEventListener('click', () => {
+             addPersonForm.classList.remove('hidden');
+             peopleGrid.parentElement.classList.remove('hidden');
+             personDetailsForm.classList.add('hidden');
+        });
+        
+        // --- Lógica de Imagens Flutuantes (NOVO) ---
+        
+        // Função de debounce para limitar a frequência de execução
+        function debounce(func, delay) {
+            let timeout;
+            return function(...args) {
+                const context = this;
+                clearTimeout(timeout);
+                timeout = setTimeout(() => func.apply(context, args), delay);
+            };
+        }
+        
+        function checkPeopleInText() {
+            // Conjunto para rastrear as pessoas encontradas no texto atual
+            const mentionedPeopleIds = new Set();
+            const textContent = editorContent.innerText;
+            if (!textContent || peopleData.length === 0) {
+                 // Remove todas as imagens se o texto estiver vazio ou não houver pessoas
+                floatingImagesContainer.innerHTML = '';
+                activeFloatingImages.clear();
+                return;
+            }
+            
+            // 1. Identifica todas as pessoas mencionadas no texto
+            peopleData.forEach(person => {
+                const names = person.names;
+                // Cria uma regex para todos os nomes da pessoa
+                const regex = new RegExp(`\\b(${names.join('|')})\\b`, 'gi');
+                if (regex.test(textContent)) {
+                    mentionedPeopleIds.add(person.id);
+                }
+            });
+            
+            // 2. Remove imagens de pessoas que não estão mais no texto
+            activeFloatingImages.forEach((imageElement, personId) => {
+                if (!mentionedPeopleIds.has(personId)) {
+                    imageElement.classList.remove('show');
+                    setTimeout(() => {
+                        imageElement.remove();
+                        activeFloatingImages.delete(personId);
+                    }, 500); // Remove depois da animação de saída
+                }
+            });
+            
+            // 3. Adiciona imagens para novas pessoas mencionadas
+            mentionedPeopleIds.forEach(personId => {
+                if (!activeFloatingImages.has(personId)) {
+                    const person = peopleData.find(p => p.id === personId);
+                    if (person) {
+                        const img = document.createElement('img');
+                        img.src = person.photo_data;
+                        img.alt = `Foto de ${person.names[0]}`;
+                        img.className = 'floating-image';
+                        img.dataset.id = person.id; // Salva o ID da pessoa no elemento
+                        
+                        // Adiciona evento de clique para abrir o modal de detalhes
+                        img.addEventListener('click', () => {
+                             showPersonDetailsModal(person.id);
+                        });
+                        
+                        const topPos = Math.random() * (window.innerHeight * 0.8 - 80) + (window.innerHeight * 0.1);
+                        const leftPos = Math.random() * (window.innerWidth * 0.8 - 80) + (window.innerWidth * 0.1);
+                        img.style.top = `${topPos}px`;
+                        img.style.left = `${leftPos}px`;
+                        
+                        floatingImagesContainer.appendChild(img);
+                        activeFloatingImages.set(personId, img);
+                        
+                        setTimeout(() => {
+                            img.classList.add('show');
+                        }, 10);
+                    }
+                }
+            });
+        }
+        
+        // Otimiza o evento 'input' com debounce
+        const debouncedCheckPeople = debounce(checkPeopleInText, 250);
+        editorContent.addEventListener('input', debouncedCheckPeople);
+
+        // --- Lógica para o Modal de Detalhes da Pessoa ---
+
+        async function showPersonDetailsModal(personId) {
+             const person = peopleData.find(p => p.id === personId);
+             if (!person) return;
+             
+             modalPersonName.textContent = person.names[0];
+             modalPersonContent.innerHTML = 'Carregando detalhes...';
+
+             personDetailsModal.style.display = 'flex';
+             
+             const detailsRef = doc(db, `artifacts/${appId}/users/${userId}/people_photos/${personId}/details/info`);
+             const docSnap = await getDoc(detailsRef);
+
+             let contentHtml = '';
+             if (docSnap.exists()) {
+                 const data = docSnap.data();
+                 if (data.basic_info) contentHtml += `<h4 class="font-bold text-lg text-gray-800">Informações Básicas</h4><p>${data.basic_info.replace(/\n/g, '<br>')}</p>`;
+                 if (data.history) contentHtml += `<h4 class="font-bold text-lg text-gray-800 mt-4">Histórico</h4><p>${data.history.replace(/\n/g, '<br>')}</p>`;
+                 if (data.memorable_experiences) contentHtml += `<h4 class="font-bold text-lg text-gray-800 mt-4">Experiências Marcantes</h4><p>${data.memorable_experiences.replace(/\n/g, '<br>')}</p>`;
+                 if (data.extra_photos && data.extra_photos.length > 0) {
+                     contentHtml += `<h4 class="font-bold text-lg text-gray-800 mt-4">Outras Fotos</h4>`;
+                     contentHtml += `<div class="details-extra-photos">`;
+                     data.extra_photos.forEach(photo => {
+                         contentHtml += `<img src="${photo}" class="w-full h-auto rounded-md cursor-pointer" onclick="document.getElementById('lightboxImage').src = this.src; document.getElementById('lightboxModal').classList.add('show');" />`;
+                     });
+                     contentHtml += `</div>`;
+                 }
+             } else {
+                 contentHtml = '<p class="text-gray-500">Nenhum detalhe adicional encontrado para esta pessoa.</p>';
+             }
+             modalPersonContent.innerHTML = contentHtml;
+        }
+
+        closeDetailsModalBtn.addEventListener('click', () => {
+             personDetailsModal.style.display = 'none';
+        });
+        
+    </script>
+</body>
+</html>
